@@ -1,13 +1,16 @@
 from django.shortcuts import render,redirect
+from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from . models import *
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 import json
 from django.contrib.auth import authenticate, login, logout
 from . forms import EigeneUserCreationForm
 import uuid
 from django.utils.safestring import mark_safe
+from . viewtools import gastCookie,gastBestellung
+from paypal.standard.forms import PayPalPaymentsForm
 
 # Create your views here.
 
@@ -23,9 +26,11 @@ def warenkorb(request):
         bestellung, created = Bestellung.objects.get_or_create(kunde=kunde, erledigt=False)
         artikels = bestellung.bestellteartikel_set.all()
     else:
-        artikels = []
-        bestellung = []
-        print(f"Authenticated: {request.user.is_authenticated}")
+        cookieDaten = gastCookie(request)
+        artikels = cookieDaten['artikels']
+        bestellung = cookieDaten['bestellung']
+
+      
     ctx = {"artikels": artikels, "bestellung": bestellung}
     return render(request, "shop/warenkorb.html",ctx)
 
@@ -35,9 +40,11 @@ def kasse(request):
         bestellung, created = Bestellung.objects.get_or_create(kunde=kunde, erledigt=False)
         artikels = bestellung.bestellteartikel_set.all()
     else:
-        artikels = []
-        bestellung = []
-        print(f"Authenticated: {request.user.is_authenticated}")
+        cookieDaten = gastCookie(request)
+        artikels = cookieDaten['artikels']
+        bestellung = cookieDaten['bestellung']
+        
+
     ctx = {"artikels": artikels, "bestellung": bestellung}
     return render(request, "shop/kasse.html",ctx)
 
@@ -116,26 +123,42 @@ def bestellen(request):
     if request.user.is_authenticated:
         kunde = request.user.kunde
         bestellung, created = Bestellung.objects.get_or_create(kunde=kunde, erledigt=False)
-        gesamtpreis = float(daten['benutzerDaten']['gesamtpreis'])
-        bestellung.auftrags_id = auftrags_id
-        bestellung.erledigt = True
-        bestellung.save()
-
-        Adresse.objects.create(
-        kunde= kunde,
-        bestellung = bestellung,
-        adresse= daten['lieferadresse']['adresse'],
-        plz= daten['lieferadresse']['plz'],
-        stadt= daten['lieferadresse']['stadt'],
-        land= daten['lieferadresse']['land'],
-        )
-    
+        
     else:
-        print('nicht eingeloggt!')
+        kunde,bestellung = gastBestellung(request,daten)
 
+    gesamtpreis = float(daten['benutzerDaten']['gesamtpreis'])
+    bestellung.auftrags_id = auftrags_id
+    bestellung.erledigt = True
+    bestellung.save()
+
+    Adresse.objects.create(
+    kunde= kunde,
+    bestellung = bestellung,
+    adresse= daten['lieferadresse']['adresse'],
+    plz= daten['lieferadresse']['plz'],
+    stadt= daten['lieferadresse']['stadt'],
+    land= daten['lieferadresse']['land'],
+    )
+
+    paypal_dict = {
+        "business": "sb-bws4q39666031@business.example.com",
+        "amount": gesamtpreis,
+        # "item_name": "name of the item",
+        "invoice": auftrags_id,
+        "currency_code":"EUR",
+        "notify_url": request.build_absolute_uri(reverse('paypal-ipn')),
+        "return": request.build_absolute_uri(reverse('shop')),
+        # "cancel_return": request.build_absolute_uri(reverse('your-cancel-view')),
+    }
+
+    paypalform = PayPalPaymentsForm(initial=paypal_dict)
     auftragsUrl = str(auftrags_id)
-    messages.success(request, mark_safe("Vielen Dank für Ihre <a href='/bestellung/"+auftragsUrl+"'> Bestellung: "+auftragsUrl+"</a>"))
-    return JsonResponse('Bestellung erfolgreich', safe=False)
+    messages.success(request, mark_safe("Vielen Dank für Ihre <a href='/bestellung/"+auftragsUrl+"'> Bestellung: "+auftragsUrl+"</a><br> Jetzt bezahlen: "+paypalform.render()))
+    # return JsonResponse('Bestellung erfolgreich', safe=False)
+    response = HttpResponse('Bestellung erfolgreich')
+    response.delete_cookie('warenkorb')
+    return response
 
 @login_required(login_url='login')
 def bestellung(request,id):
