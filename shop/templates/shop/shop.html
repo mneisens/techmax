@@ -1,0 +1,26 @@
+{% extends 'shop/index.html' %}
+{% load static %}
+{% block content %}
+    <div class="row row-cols-4">
+      {% for artikel in artikels  %}
+        <div class="col mb-3">
+            <div class="card" style="max-width: 25rem;">
+              {% if artikel.bild %}
+                <img src="{{ artikel.bild.url }}" class="card-img-top" alt="...">
+              {% else %}
+              <img src=" {% static 'bilder/dummy.jpg' %}" class="card-img-top" alt="...">
+              {% endif %}
+                <div class="card-body">
+                  <h5 class="card-title">{{ artikel.name }}</h5>
+                  <p class="card-text">{{ artikel.beschreibung}}</p>
+                  <div class="d-flex justify-content-between">
+                    <h5 class="text-secondary">{{ artikel.preis|floatformat:2 }}€</h5>
+                    <button data-artikel={{artikel.id}} data-action="bestellen" class="btn btn-outline-danger 
+                    warenkorb-bestellen">Bestellen</button>
+                  </div>
+                </div>
+            </div>
+        </div>
+      {% endfor %}
+    </div>
+{% endblock content %}

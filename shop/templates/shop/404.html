@@ -1,0 +1,15 @@
+{% extends 'shop/index.html' %}
+{% load static %}
+
+{% block content %}
+
+<h1>404 Fehler</h1>
+
+
+<div class="d-flex justify-content-center">
+    <img src="{% static 'bilder/404.jpg' %}" class="img-fluid" alt="">
+    <div class="spinner-border text-secondary" style="width: 5rem; height: 5rem; position: absolute; left: 20%; top: 25%;"></div>
+</div>
+
+
+{% endblock %}
